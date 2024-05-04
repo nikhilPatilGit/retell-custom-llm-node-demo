@@ -1,6 +1,4 @@
-# Use the official Node.js image as a base
-FROM node:14
-
+FROM node:18-alpine AS base
 # Set the working directory inside the container
 WORKDIR /app
 
@@ -20,7 +18,7 @@ ENV RETELL_API_KEY="25ef6a3c-3a77-4a03-9c5e-a19a64e2491b"
 ENV OPENAI_APIKEY="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"
 
 # Expose the port the app runs on
-EXPOSE 3000
+EXPOSE 8081
 
 # Command to run the application
 CMD ["npm", "run", "dev"]
