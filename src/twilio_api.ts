@@ -1,9 +1,9 @@
 import { Request, Response } from "express";
-import VoiceResponse from "twilio/lib/twiml/VoiceResponse";
 import expressWs from "express-ws";
-import twilio, { Twilio } from "twilio";
 import Retell from "retell-sdk";
 import { RegisterCallResponse } from "retell-sdk/src/resources";
+import twilio, { Twilio } from "twilio";
+import VoiceResponse from "twilio/lib/twiml/VoiceResponse";
 
 export class TwilioClient {
   private twilio: Twilio;
