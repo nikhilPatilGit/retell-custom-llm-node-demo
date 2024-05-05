@@ -1,24 +1,37 @@
+# Base image
 FROM node:18-alpine AS base
-# Set the working directory inside the container
 WORKDIR /app
+RUN apk add --no-cache libc6-compat
+RUN addgroup --system nodejs && adduser --system --ingroup nodejs nodejs
 
-# Copy package.json and package-lock.json to the working directory
+# Dependencies installation stage
+FROM base AS deps
 COPY package*.json ./
+COPY yarn.lock* pnpm-lock.yaml* ./
+RUN if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+    elif [ -f package-lock.json ]; then npm ci; \
+    elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm and pnpm install --frozen-lockfile; \
+    else echo "Lockfile not found." && exit 1; \
+    fi
 
-# Install dependencies
-RUN npm install --production
-
-# Copy the rest of the application code
+# Build stage for compiling TypeScript
+FROM deps AS builder
 COPY . .
+RUN npm run build || exit 1
 
-# Set environment variables
+# Production stage, setting up the runtime environment
+FROM base AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
 ENV TWILIO_ACCOUNT_ID="ACf4ac03ab3333cd6d53962035dfb0b743" 
 ENV TWILIO_AUTH_TOKEN="0ad3adc856860524079f10777b09a7ef"
 ENV RETELL_API_KEY="25ef6a3c-3a77-4a03-9c5e-a19a64e2491b"
 ENV OPENAI_APIKEY="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"
 
-# Expose the port the app runs on
+USER nodejs
 EXPOSE 8081
-
-# Command to run the application
-CMD ["npm", "run", "dev"]
+CMD ["node", "dist/index.js"]

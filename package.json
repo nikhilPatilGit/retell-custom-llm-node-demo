@@ -4,7 +4,8 @@
   "description": "Example backend written in node. This aims to help people get started connecting their LLM.",
   "main": "index.js",
   "scripts": {
-    "dev": "NODE_ENV=development nodemon src/index.ts"
+    "dev": "NODE_ENV=development nodemon src/index.ts",
+    "build": "tsc"
   },
   "author": "",
   "license": "ISC",
