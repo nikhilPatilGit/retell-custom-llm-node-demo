@@ -137,6 +137,10 @@ export class TwilioClient {
               sample_rate: 8000,
               from_number: from,
               to_number: to,
+              retell_llm_dynamic_variables: {
+                from_number: from,
+                to_number: to,
+              },
               metadata: { twilio_call_sid: callSid },
             });
           if (callResponse) {
