@@ -115,13 +115,11 @@ export class TwilioClient {
   /* Twilio voice webhook. This will be called whenever there is an incoming or outgoing call. 
      Register call with Retell at this stage and pass in returned call_id to Retell*/
   ListenTwilioVoiceWebhook = (app: expressWs.Application) => {
-    app.get("/make-call", async (req: Request, res: Response) => {
+    app.post("/make-call/:agent_id", async (req: Request, res: Response) => {
       try {
-        await this.CreatePhoneCall(
-          "+353906406202",
-          "+353894540728",
-          "d718b1a644b16bd007e27911cd4b1f1c",
-        );
+        const agent_id = req.params.agent_id;
+        const { from, to, callSid } = req.body;
+        await this.CreatePhoneCall(from, to, agent_id);
         res.set("Content-Type", "text/xml");
         res.send("All Good");
       } catch (err) {
