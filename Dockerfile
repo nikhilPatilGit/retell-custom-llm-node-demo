@@ -27,7 +27,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 
 ENV TWILIO_ACCOUNT_ID="ACf4ac03ab3333cd6d53962035dfb0b743" 
-ENV TWILIO_AUTH_TOKEN="0ad3adc856860524079f10777b09a7ef"
+ENV TWILIO_AUTH_TOKEN="c2c6bb751e47b74b587b76e8e7f34c5a"
 ENV RETELL_API_KEY="25ef6a3c-3a77-4a03-9c5e-a19a64e2491b"
 ENV OPENAI_APIKEY="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"
 ENV NGROK_IP_ADDRESS="https://retell-custom-llm-node-demo-rwt2j7yaaa-ew.a.run.app"

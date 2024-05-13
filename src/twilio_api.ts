@@ -118,7 +118,7 @@ export class TwilioClient {
     app.post("/make-call/:agent_id", async (req: Request, res: Response) => {
       try {
         const agent_id = req.params.agent_id;
-        const { from, to, callSid } = req.body;
+        const { from, to } = req.body;
         await this.CreatePhoneCall(from, to, agent_id);
         res.set("Content-Type", "text/xml");
         res.send("All Good");
