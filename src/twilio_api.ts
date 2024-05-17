@@ -74,7 +74,7 @@ export class TwilioClient {
   ) => {
     try {
       await this.twilio.calls.create({
-        machineDetection: "Enable", // detects if the other party is IVR
+        machineDetection: "none", // detects if the other party is IVR
         machineDetectionTimeout: 8,
         asyncAmd: "true", // call webhook when determined whether it is machine
         asyncAmdStatusCallback: `${process.env.NGROK_IP_ADDRESS}/twilio-voice-webhook/${agentId}`, // Webhook url for machine detection
