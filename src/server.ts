@@ -1,19 +1,18 @@
+import cors from "cors";
 import express, { Request, Response } from "express";
 import expressWs from "express-ws";
-import { RawData, WebSocket } from "ws";
-import { createServer, Server as HTTPServer } from "http";
-import cors from "cors";
-import { TwilioClient } from "./twilio_api";
+import { Server as HTTPServer, createServer } from "http";
 import { Retell } from "retell-sdk";
 import { RegisterCallResponse } from "retell-sdk/resources/call";
+import { RawData, WebSocket } from "ws";
+import { TwilioClient } from "./twilio_api";
 import { CustomLlmRequest, CustomLlmResponse } from "./types";
 // Any one of these following LLM clients can be used to generate responses.
-import { FunctionCallingLlmClient } from "./llms/llm_openai_func_call";
 // import { DemoLlmClient } from "./llms/llm_azure_openai";
 // import { FunctionCallingLlmClient } from "./llms/llm_azure_openai_func_call_end_call";
 // import { FunctionCallingLlmClient } from "./llms/llm_azure_openai_func_call";
 // import { DemoLlmClient } from "./llms/llm_openrouter";
-
+import { GrokLlmClient } from "./llms/llm_grok";
 export class Server {
   private httpServer: HTTPServer;
   public app: expressWs.Application;
@@ -36,6 +35,8 @@ export class Server {
     this.handleRetellLlmWebSocket();
     this.handleRegisterCallAPI();
     this.handleWebhook();
+    this.handleCalculateWebhook();
+    this.handleTransferCallWebhook();
 
     // If you want to create an outbound call with your number
     // this.twilioClient.CreatePhoneCall(
@@ -134,7 +135,7 @@ export class Server {
           ws.send(JSON.stringify(config));
 
           // Start sending the begin message to signal the client is ready.
-          const llmClient = new FunctionCallingLlmClient();
+          const llmClient = new GrokLlmClient();
 
           ws.on("error", (err) => {
             console.error("Error received in LLM websocket client: ", err);
@@ -180,5 +181,49 @@ export class Server {
         }
       },
     );
+  }
+
+  handleCalculateWebhook() {
+    this.app.post("/calculate", (req: Request, res: Response) => {
+      console.log("Received request:", req.body);
+
+      const { call, name, args } = req.body;
+
+      if (name !== "calculate_sum_total") {
+        return res.status(400).json({ error: "Invalid tool name" });
+      }
+
+      if (
+        !args ||
+        !Array.isArray(args.numbers) ||
+        !args.numbers.every((num: any) => typeof num === "number")
+      ) {
+        return res.status(400).json({ error: "Invalid input" });
+      }
+
+      const sum = args.numbers.reduce((acc: any, num: any) => acc + num, 0);
+      const result = parseFloat(sum.toFixed(3));
+      console.log("result", result);
+      res.json({ result });
+    });
+  }
+
+  handleTransferCallWebhook() {
+    this.app.post("/transferCall", async (req: Request, res: Response) => {
+      try {
+        const { args } = req.body;
+        console.log(req.body);
+        console.log("Twilio Call SID:", args.twilio_call_sid);
+
+        // Use twilio_call_sid and execution_message as needed
+        // For example, you might want to log them or pass them to another function
+
+        res.set("Content-Type", "text/xml");
+        res.send("All Good");
+      } catch (err) {
+        console.error("Error in twilio voice webhook:", err);
+        res.status(500).send();
+      }
+    });
   }
 }

@@ -103,6 +103,7 @@ export class TwilioClient {
   // Use LLM function calling or some kind of parsing to determine when to transfer away this call
   TransferCall = async (sid: string, transferTo: string) => {
     try {
+      await this.twilio.calls;
       const call = await this.twilio.calls(sid).update({
         twiml: `<Response><Dial>${transferTo}</Dial></Response>`,
       });
@@ -127,13 +128,16 @@ export class TwilioClient {
         res.status(500).send();
       }
     });
+
     app.post(
       "/twilio-voice-webhook/:agent_id",
       async (req: Request, res: Response) => {
+        //console.log(req.body);
         const agent_id = req.params.agent_id;
-        const { AnsweredBy, from, to, callSid } = req.body;
+        const { AnsweredBy, from, to, CallSid } = req.body;
         try {
           // Respond with TwiML to hang up the call if its machine)
+
           if (AnsweredBy && AnsweredBy === "machine_start") {
             this.EndCall(req.body.CallSid);
             return;
@@ -152,8 +156,9 @@ export class TwilioClient {
               retell_llm_dynamic_variables: {
                 from_number: from,
                 to_number: to,
+                twilio_call_sid: CallSid,
               },
-              metadata: { twilio_call_sid: callSid },
+              metadata: { twilio_call_sid: CallSid },
             });
           if (callResponse) {
             // Start phone call websocket
@@ -162,6 +167,7 @@ export class TwilioClient {
             const stream = start.stream({
               url: `wss://api.retellai.com/audio-websocket/${callResponse.call_id}`,
             });
+            console.log("Ending stream");
             res.set("Content-Type", "text/xml");
             res.send(response.toString());
           }
