@@ -1,3 +1,4 @@
+import axios from "axios";
 import cors from "cors";
 import express, { Request, Response } from "express";
 import expressWs from "express-ws";
@@ -32,10 +33,12 @@ export class Server {
     this.twilioClient = new TwilioClient(this.retellClient);
     this.twilioClient.ListenTwilioVoiceWebhook(this.app);
 
-    this.handleRetellLlmWebSocket();
-    this.handleRegisterCallAPI();
-    this.handleWebhook();
-    this.handleCalculateWebhook();
+    //this.handleRetellLlmWebSocket();
+    //this.handleRegisterCallAPI();
+    // this.handleWebhook();
+    this.handleBookingWebhook();
+    this.handleTakeMessageWebhook(); // Add this line
+    //this.handleCalculateWebhook();
     this.handleTransferCallWebhook();
 
     // If you want to create an outbound call with your number
@@ -122,7 +125,10 @@ export class Server {
       async (ws: WebSocket, req: Request) => {
         try {
           const callId = req.params.call_id;
-          console.log("Handle llm ws for: ", callId);
+          //console.log("Handle llm ws for: ", req);
+
+          // Add a delay before proceeding
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // 2 seconds delay
 
           // Send config to Retell server
           const config: CustomLlmResponse = {
@@ -135,7 +141,7 @@ export class Server {
           ws.send(JSON.stringify(config));
 
           // Start sending the begin message to signal the client is ready.
-          const llmClient = new GrokLlmClient();
+          const llmClient = new GrokLlmClient(this.twilioClient);
 
           ws.on("error", (err) => {
             console.error("Error received in LLM websocket client: ", err);
@@ -155,7 +161,10 @@ export class Server {
             // Not all of them need to be handled, only response_required and reminder_required.
             if (request.interaction_type === "call_details") {
               // print call details
-              console.log("call details: ", request.call);
+
+              llmClient.setCallSid(request.call.metadata.twilio_call_sid);
+              console.log("call sid: ", request.call.metadata.twilio_call_sid);
+
               // Send begin message to start the conversation
               llmClient.BeginMessage(ws);
             } else if (
@@ -163,8 +172,9 @@ export class Server {
               request.interaction_type === "response_required"
             ) {
               console.clear();
-              console.log("req", request);
-              llmClient.DraftResponse(request, ws);
+              console.log("req", request.call);
+              //const callSid = request.call.metadata.twilio_call_sid;
+              llmClient.DraftResponse(request, ws, "callSid");
             } else if (request.interaction_type === "ping_pong") {
               let pingpongResponse: CustomLlmResponse = {
                 response_type: "ping_pong",
@@ -181,6 +191,76 @@ export class Server {
         }
       },
     );
+  }
+
+  handleBookingWebhook() {
+    this.app.post("/booking", async (req: Request, res: Response) => {
+      console.log("Received request:", req.body);
+      const { args, call } = req.body;
+      console.log("call", call);
+      console.log("args", args);
+      const {
+        name,
+        email,
+        phone,
+        bookingDate,
+        numberOfGuest,
+        message,
+        isCallingFromSameNumber,
+      } = args;
+
+      const URL =
+        "https://demo.abmiroapps.com/wp-json/reservation-api/post/reservation";
+      const postTreeApiKey = "myGoodInfo#4545";
+
+      try {
+        const response = await axios.post(URL, null, {
+          params: {
+            name,
+            party: numberOfGuest,
+            email,
+            phone: isCallingFromSameNumber ? call.from_number : phone,
+            booking_date: bookingDate,
+            message,
+          },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${postTreeApiKey}`,
+          },
+        });
+
+        console.log("Booking response:", response.data);
+        res.json(response.data);
+      } catch (error) {
+        console.error("Error processing booking request:", error);
+        res.status(500).json({
+          error: "Error occurred while processing the booking request",
+        });
+      }
+    });
+  }
+
+  handleTakeMessageWebhook() {
+    this.app.post("/takeMessage", async (req: Request, res: Response) => {
+      console.log("Received takeMessage request:", req.body);
+      const { args, call } = req.body;
+      const { message } = args;
+      const phoneNumber = call.from_number;
+
+      try {
+        const smsResponse = await this.twilioClient.SendSMS(
+          phoneNumber,
+          message,
+        );
+        console.log("SMS sent successfully:", smsResponse.sid);
+        res.json({ success: true, messageSid: smsResponse.sid });
+      } catch (error) {
+        console.error("Error sending SMS:", error);
+        res.status(500).json({
+          error: "Error occurred while sending the SMS",
+        });
+      }
+    });
   }
 
   handleCalculateWebhook() {
@@ -215,11 +295,10 @@ export class Server {
         console.log(req.body);
         console.log("Twilio Call SID:", args.twilio_call_sid);
 
-        // Use twilio_call_sid and execution_message as needed
-        // For example, you might want to log them or pass them to another function
+        this.twilioClient.TransferCall(args.twilio_call_sid, "+353433342214");
 
         res.set("Content-Type", "text/xml");
-        res.send("All Good");
+        res.send("Call Transferred");
       } catch (err) {
         console.error("Error in twilio voice webhook:", err);
         res.status(500).send();

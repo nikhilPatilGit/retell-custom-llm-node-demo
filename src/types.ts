@@ -24,12 +24,14 @@ export interface ResponseRequiredRequest {
   interaction_type: "response_required";
   transcript: Utterance[];
   response_id: number;
+  call: any;
 }
 
 export interface ReminderRequiredRequest {
   interaction_type: "reminder_required";
   transcript: Utterance[];
   response_id: number;
+  call: any;
 }
 
 export type CustomLlmRequest =

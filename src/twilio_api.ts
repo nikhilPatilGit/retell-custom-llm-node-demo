@@ -113,6 +113,22 @@ export class TwilioClient {
     }
   };
 
+  // New method to send SMS
+  SendSMS = async (to: string, body: string) => {
+    try {
+      const message = await this.twilio.messages.create({
+        body: body,
+        messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
+        to: to,
+      });
+      console.log("SMS sent, SID:", message.sid);
+      return message;
+    } catch (error) {
+      console.error("Error sending SMS:", error);
+      throw error;
+    }
+  };
+
   /* Twilio voice webhook. This will be called whenever there is an incoming or outgoing call. 
      Register call with Retell at this stage and pass in returned call_id to Retell*/
   ListenTwilioVoiceWebhook = (app: expressWs.Application) => {
@@ -134,7 +150,8 @@ export class TwilioClient {
       async (req: Request, res: Response) => {
         //console.log(req.body);
         const agent_id = req.params.agent_id;
-        const { AnsweredBy, from, to, CallSid } = req.body;
+        console.log(req.body);
+        const { AnsweredBy, Caller, To, CallSid } = req.body;
         try {
           // Respond with TwiML to hang up the call if its machine)
 
@@ -151,16 +168,17 @@ export class TwilioClient {
               audio_websocket_protocol: "twilio",
               audio_encoding: "mulaw",
               sample_rate: 8000,
-              from_number: from,
-              to_number: to,
+              from_number: Caller,
+              to_number: To,
               retell_llm_dynamic_variables: {
-                from_number: from,
-                to_number: to,
+                from_number: Caller,
+                to_number: To,
                 twilio_call_sid: CallSid,
               },
               metadata: { twilio_call_sid: CallSid },
             });
           if (callResponse) {
+            await new Promise((resolve) => setTimeout(resolve, 3000)); // 2 seconds delay
             // Start phone call websocket
             const response = new VoiceResponse();
             const start = response.connect();

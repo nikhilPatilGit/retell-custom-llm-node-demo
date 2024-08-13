@@ -4,9 +4,11 @@ import {
   ChatCompletionAssistantMessageParam,
   ChatCompletionMessageParam,
   ChatCompletionSystemMessageParam,
+  ChatCompletionTool,
   ChatCompletionUserMessageParam,
 } from "groq-sdk/resources/chat/completions";
 import { WebSocket } from "ws";
+import { TwilioClient } from "../twilio_api";
 import {
   CustomLlmResponse,
   ReminderRequiredRequest,
@@ -15,77 +17,13 @@ import {
 } from "../types";
 
 const beginSentence =
-  "Hello Welcome to Spicy Taco, Would you like to place an order?";
+  "Good morning, Front Desk, this is Eefa. How may I assist you today?";
 
 const agentPrompt = `## Identity
 
-You are Eefa, an Receptionist for the restaurant "Spicy Taco". Your job is to take take the order for the food as per the restaurant menu when customers call over the phone. Here's the information about the restaurant:
+You are Eefa, a Receptionist at Front-Desk  for the hotel "Ritz". Your job is to listen to the caller and understand their intent and accordingly transfer their call to correct department.
 
 Anything with *Note:*  is just for your information and in case caller ask for it, no need to read it to the caller.
-
-## Restaurant Info
-
-Spicy Taco
-
-**Location:** Dublin, Ireland
-
-### Backstory
-
-Spicy Taco was born out of a deep love for Mexican cuisine and a desire to bring authentic, flavorful burritos to the vibrant city of Dublin.
-
-## Restaurant Menu
-
-*Note: Anything without a price is included in the price.*
-
-### Items for Order
-
-1. **Burrito**
-2. **Burrito Bowl**
-
-
-### Customization Options
-
-### Rice (Required)
-
-- Mexican Rice
-- Lemon Rice
-
-### Beans (1 of 1 Max)
-
-- Black Beans
-- Pinto Beans
-
-### Burrito Filling (Required)
-
-- Pork - €10.40
-- Chicken - €10.40
-- Beef - €10.70
-- Vegetables - €8.55
-
-### Extra Protein
-
-- Extra Beef - €3.20
-- Extra Chicken - €3.20
-- Extra Pork - €3.20
-
-### Salsa (1 of 2 Max)
-
-- Salsa Roja
-- Sweet Corn Salsa
-- Salsa Verde
-- Tomato Salsa
-
-### Extras
-
-- Guacamole - €1.55
-- Jalapenos - €0.80
-- Fajita Veg - €0.80
-
-### Drinks
-
-- Coke - €2.25
-- Diet Coke - €1.95
-- Coke Zero - €1.95
 
 ## Style Guardrails
 
@@ -104,34 +42,27 @@ Stay in Character: Keep conversations within your role's scope, guiding them bac
 Ensure Fluid Dialogue: Respond in a role-appropriate, direct manner to maintain a smooth conversation flow.
 Avoid Repetition: Do not repeat parting phrases, especially after the conversation has ended.
 
-**Note:** DO NOT REPEAT THE ORDER UNLESS you have reached the end of the conversation.
-**Note:** Do not tell them price and only calculate price in the end of the conversation.
 ## Task
 
 You will follow the steps below, do not skip steps, and only ask up to one question in response. If they ask any follow up question refer to Restaurant Menu.
 
-1. Begin with Welcome to Spicy Taco. Can I please take your order?.
-2. What type of rice would you like Mexican or lemon rice?
-3. What type of beans would you like Pinto or Black beans?
-4. Which filling would you prefer?
-5. Would you like to add any extra protein?
-6. What type of salsa would you like? (You can choose up to 2)
-7. Would you like to add any extras?
-8. Would you like to add a drink to your order?
-9. Do you have any special instructions or dietary requirements?
-10. Will this order be for delivery or collection?
-11. (If delivery) What is your delivery address?
-12. (If collection) What time will you be picking up your order?
-13. Can I have your name and contact number, please?
-14. Would you like to pay now or upon collection or delivery?`;
+1. Begin with Good morning, Front Desk, this is Eefa. How may I assist you today?.
+2. If the caller ask about cleaning the room call transfer_call to transfer to room cleaning service.`;
 
 export class GrokLlmClient {
   private client: Groq;
+  private twilioClient: TwilioClient;
+  private callSid: string;
 
-  constructor() {
+  setCallSid(callSid: string) {
+    this.callSid = callSid;
+  }
+
+  constructor(twilioClient: TwilioClient) {
     this.client = new Groq({
       apiKey: process.env["GROQ_API_KEY"], // This is the default and can be omitted
     });
+    this.twilioClient = twilioClient;
   }
 
   // First sentence requested
@@ -182,6 +113,25 @@ export class GrokLlmClient {
   }
 
   private async getGroqChatStream(requestMessages: ChatRequestMessage[]) {
+    const tools: ChatCompletionTool[] = [
+      {
+        type: "function",
+        function: {
+          name: "transfer_call",
+          description: "Transfer the call to a human agent",
+          parameters: {
+            type: "object",
+            properties: {
+              transfer_to: {
+                type: "string",
+                description: "The phone number to transfer the call to",
+              },
+            },
+            required: ["transfer_to"],
+          },
+        },
+      },
+    ];
     return this.client.chat.completions.create({
       //
       // Required parameters
@@ -189,7 +139,8 @@ export class GrokLlmClient {
       messages: this.convertChatRequestMessagesToParams(requestMessages),
 
       model: "llama-3.1-8b-instant",
-
+      tool_choice: "auto",
+      tools: tools,
       //
       // Optional parameters
       //
@@ -223,7 +174,6 @@ export class GrokLlmClient {
   ): Array<ChatCompletionMessageParam> {
     return messages.map((message) => {
       let param: ChatCompletionMessageParam;
-
       switch (message.role) {
         case "system":
           param = {
@@ -245,6 +195,14 @@ export class GrokLlmClient {
             content: message.content,
             name: message.name,
           } as ChatCompletionAssistantMessageParam;
+          // case "tool":
+          //   const toolMessage = message as ChatRequestToolMessage;
+          //   console.log("toolMessage", toolMessage);
+          //   param = {
+          //     role: "tool",
+          //     content: toolMessage.content,
+          //     tool_call_id: toolMessage.toolCallId,
+          //   } as ChatCompletionToolMessageParam;
           break;
         default:
           throw new Error(`Unknown role: ${message.role}`);
@@ -257,36 +215,43 @@ export class GrokLlmClient {
   async DraftResponse(
     request: ResponseRequiredRequest | ReminderRequiredRequest,
     ws: WebSocket,
+    callSid: string,
   ) {
     const requestMessages: ChatRequestMessage[] = this.PreparePrompt(request);
-
-    // const option: GetChatCompletionsOptions = {
-    //   temperature: 0.3,
-    //   maxTokens: 200,
-    //   frequencyPenalty: 1,
-    // };
-
     try {
-      // let events = await this.client.streamChatCompletions(
-      //   process.env.AZURE_OPENAI_DEPLOYMENT_NAME,
-      //   requestMessages,
-      //   option,
-      // );
-
       let events = await this.getGroqChatStream(requestMessages);
 
       for await (const event of events) {
         if (event.choices.length >= 1) {
           let delta = event.choices[0].delta;
-          if (!delta || !delta.content) continue;
-          const res: CustomLlmResponse = {
-            response_type: "response",
-            response_id: request.response_id,
-            content: delta.content,
-            content_complete: false,
-            end_call: false,
-          };
-          ws.send(JSON.stringify(res));
+          if (!delta) continue;
+
+          if (delta.tool_calls) {
+            // Handle tool calls here
+            console.log("Tool call received:", delta.tool_calls);
+            // TODO: Handle tool calls
+
+            const res: CustomLlmResponse = {
+              response_type: "response",
+              response_id: request.response_id,
+              content:
+                "Let me transfer your call to the room cleaning service, please hold on for a moment.",
+              content_complete: false,
+              end_call: false,
+            };
+            ws.send(JSON.stringify(res));
+
+            this.twilioClient.TransferCall(this.callSid, "+353899471614");
+          } else if (delta.content) {
+            const res: CustomLlmResponse = {
+              response_type: "response",
+              response_id: request.response_id,
+              content: delta.content,
+              content_complete: false,
+              end_call: false,
+            };
+            ws.send(JSON.stringify(res));
+          }
         }
       }
     } catch (err) {
