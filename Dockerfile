@@ -6,12 +6,8 @@ RUN addgroup --system nodejs && adduser --system --ingroup nodejs nodejs
 
 # Dependencies installation stage
 FROM base AS deps
-COPY package.json package-lock.json* ./
-RUN if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
-    elif [ -f package-lock.json ]; then npm ci; \
-    elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm and pnpm install --frozen-lockfile; \
-    else echo "Lockfile not found." && exit 1; \
-    fi
+COPY package.json ./
+RUN npm install && npm cache clean --force
 
 # Build stage for compiling TypeScript
 FROM deps AS builder
