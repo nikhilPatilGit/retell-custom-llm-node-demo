@@ -210,7 +210,7 @@ export class Server {
       } = args;
 
       const URL =
-        "https://demo.abmiroapps.com/wp-json/reservation-api/post/reservation";
+        "https://jodhpur.restaurant/wp-json/reservation-api/post/reservation";
       const postTreeApiKey = "myGoodInfo#4545";
 
       try {
