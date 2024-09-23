@@ -295,7 +295,10 @@ export class Server {
         const twilioCallSid = call.metadata.twilio_call_sid;
 
         if (!twilioCallSid) {
-          return res.status(400).json({ error: "Twilio Call SID is required" });
+          return res.status(400).json({
+            error:
+              "We couldn't transfer the call due to some issue with phone line",
+          });
         }
 
         await this.twilioClient.TransferCall(twilioCallSid, "+353433342214");
