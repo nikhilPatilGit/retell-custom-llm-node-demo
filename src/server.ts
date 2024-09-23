@@ -295,7 +295,10 @@ export class Server {
         console.log(req.body);
         console.log("Twilio Call SID:", args.twilio_call_sid);
 
-        this.twilioClient.TransferCall(args.twilio_call_sid, "+353433342214");
+        await this.twilioClient.TransferCall(
+          args.twilio_call_sid,
+          "+353433342214",
+        );
 
         res.set("Content-Type", "text/xml");
         res.send("Call Transferred");

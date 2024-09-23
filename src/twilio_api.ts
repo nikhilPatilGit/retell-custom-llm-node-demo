@@ -103,7 +103,6 @@ export class TwilioClient {
   // Use LLM function calling or some kind of parsing to determine when to transfer away this call
   TransferCall = async (sid: string, transferTo: string) => {
     try {
-      await this.twilio.calls;
       const call = await this.twilio.calls(sid).update({
         twiml: `<Response><Dial>${transferTo}</Dial></Response>`,
       });
