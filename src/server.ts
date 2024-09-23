@@ -291,14 +291,14 @@ export class Server {
   handleTransferCallWebhook() {
     this.app.post("/transferCall", async (req: Request, res: Response) => {
       try {
-        const { args } = req.body;
-        console.log(req.body);
-        console.log("Twilio Call SID:", args.twilio_call_sid);
+        const { call } = req.body;
+        const twilioCallSid = call.metadata.twilio_call_sid;
 
-        await this.twilioClient.TransferCall(
-          args.twilio_call_sid,
-          "+353433342214",
-        );
+        if (!twilioCallSid) {
+          return res.status(400).json({ error: "Twilio Call SID is required" });
+        }
+
+        await this.twilioClient.TransferCall(twilioCallSid, "+353433342214");
 
         res.set("Content-Type", "text/xml");
         res.send("Call Transferred");
